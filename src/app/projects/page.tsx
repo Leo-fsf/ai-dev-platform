@@ -1,192 +1,255 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAppStore } from '@/lib/store'
+import { useRouter } from 'next/navigation'
 
 interface Project {
   id: string
+  userId: string
   name: string
   description: string
-  author: string
   tags: string[]
-  likes: number
+  code?: string
+  stars: number
   forks: number
+  likes: number
   createdAt: Date
-  isPublic: boolean
+  updatedAt: Date
 }
 
-const SAMPLE_PROJECTS: Project[] = [
-  {
-    id: '1',
-    name: 'React电商后台管理系统',
-    description: '基于Next.js和TypeScript的现代化电商后台，包含商品管理、订单处理、数据分析等功能',
-    author: '张三',
-    tags: ['React', 'TypeScript', 'Next.js', '电商'],
-    likes: 156,
-    forks: 43,
-    createdAt: new Date('2026-03-20'),
-    isPublic: true
-  },
-  {
-    id: '2',
-    name: 'Vue3移动端UI组件库',
-    description: '轻量级Vue3移动端组件库，包含40+常用组件，支持主题定制',
-    author: '李四',
-    tags: ['Vue3', 'TypeScript', 'UI组件', '移动端'],
-    likes: 234,
-    forks: 78,
-    createdAt: new Date('2026-03-18'),
-    isPublic: true
-  },
-  {
-    id: '3',
-    name: 'Node.js微服务架构示例',
-    description: '完整的微服务架构示例，包含服务发现、API网关、消息队列等核心组件',
-    author: '王五',
-    tags: ['Node.js', '微服务', 'Docker', '架构'],
-    likes: 189,
-    forks: 56,
-    createdAt: new Date('2026-03-15'),
-    isPublic: true
-  },
-  {
-    id: '4',
-    name: 'Python数据可视化平台',
-    description: '基于Flask和D3.js的数据可视化平台，支持多种图表类型和实时数据更新',
-    author: '赵六',
-    tags: ['Python', 'Flask', 'D3.js', '数据可视化'],
-    likes: 312,
-    forks: 92,
-    createdAt: new Date('2026-03-12'),
-    isPublic: true
-  },
-  {
-    id: '5',
-    name: 'TypeScript工具函数库',
-    description: '常用的JavaScript/TypeScript工具函数集合，包含字符串、数组、对象等操作方法',
-    author: '孙七',
-    tags: ['TypeScript', '工具库', '函数式编程'],
-    likes: 98,
-    forks: 34,
-    createdAt: new Date('2026-03-10'),
-    isPublic: true
-  },
-  {
-    id: '6',
-    name: 'Flutter跨平台应用模板',
-    description: 'Flutter跨平台应用开发模板，包含登录、首页、个人中心等常用页面',
-    author: '周八',
-    tags: ['Flutter', 'Dart', '跨平台', '移动应用'],
-    likes: 145,
-    forks: 47,
-    createdAt: new Date('2026-03-08'),
-    isPublic: true
-  }
-]
-
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(SAMPLE_PROJECTS)
+  const { user } = useAppStore()
+  const router = useRouter()
+  
+  const [projects, setProjects] = useState<Project[]>([])
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'likes' | 'forks' | 'date'>('likes')
-  const [showShareModal, setShowShareModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [newProject, setNewProject] = useState({
     name: '',
     description: '',
-    tags: '',
-    isPublic: true
+    tags: ''
   })
 
-  const allTags = Array.from(
-    new Set(projects.flatMap(p => p.tags))
-  ).slice(0, 10)
+  // 加载项目列表
+  useEffect(() => {
+    loadProjects()
+  }, [])
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesTag = !selectedTag || project.tags.includes(selectedTag)
-    return matchesSearch && matchesTag
-  })
+  // 过滤和排序项目
+  useEffect(() => {
+    let filtered = projects
 
-  const sortedProjects = [...filteredProjects].sort((a, b) => {
+    // 搜索过滤
+    if (searchTerm) {
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
+
+    // 标签过滤
+    if (selectedTag) {
+      filtered = filtered.filter(p => p.tags.includes(selectedTag))
+    }
+
+    // 排序
     switch (sortBy) {
       case 'likes':
-        return b.likes - a.likes
+        filtered.sort((a, b) => b.likes - a.likes)
+        break
       case 'forks':
-        return b.forks - a.forks
+        filtered.sort((a, b) => b.forks - a.forks)
+        break
       case 'date':
-        return b.createdAt.getTime() - a.createdAt.getTime()
-      default:
-        return 0
+        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        break
     }
-  })
 
-  const handleShareProject = () => {
+    setFilteredProjects(filtered)
+  }, [projects, searchTerm, selectedTag, sortBy])
+
+  const loadProjects = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/projects')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data.projects || [])
+      }
+    } catch (error) {
+      console.error('加载项目列表失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
     if (!newProject.name || !newProject.description) {
       alert('请填写项目名称和描述')
       return
     }
 
-    const project: Project = {
-      id: Date.now().toString(),
-      name: newProject.name,
-      description: newProject.description,
-      author: '你',
-      tags: newProject.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-      likes: 0,
-      forks: 0,
-      createdAt: new Date(),
-      isPublic: newProject.isPublic
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newProject.name,
+          description: newProject.description,
+          tags: newProject.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          alert('项目创建成功！')
+          setShowCreateModal(false)
+          setNewProject({ name: '', description: '', tags: '' })
+          loadProjects()
+        }
+      } else {
+        const data = await response.json()
+        alert(data.error || '创建项目失败')
+      }
+    } catch (error) {
+      console.error('创建项目失败:', error)
+      alert('创建项目失败')
+    }
+  }
+
+  const handleLike = async (projectId: string) => {
+    if (!user) {
+      router.push('/login')
+      return
     }
 
-    setProjects([project, ...projects])
-    setShowShareModal(false)
-    setNewProject({ name: '', description: '', tags: '', isPublic: true })
-    alert('项目分享成功！')
+    try {
+      const response = await fetch(`/api/projects/${projectId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'like' })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          loadProjects()
+        }
+      }
+    } catch (error) {
+      console.error('点赞失败:', error)
+    }
+  }
+
+  const handleFork = async (projectId: string) => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fork' })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          alert('已Fork该项目！')
+          loadProjects()
+        }
+      }
+    } catch (error) {
+      console.error('Fork失败:', error)
+    }
+  }
+
+  const allTags = Array.from(new Set(projects.flatMap(p => p.tags)))
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">加载中...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">📦 项目广场</h1>
-              <p className="text-gray-600 mt-1">发现、分享和探索优秀的项目</p>
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">📦 项目广场</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">探索和分享你的项目</p>
             </div>
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
-            >
-              🚀 分享项目
-            </button>
+            {user && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium"
+              >
+                + 创建项目
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          {/* Search */}
-          <div className="mb-4">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="🔍 搜索项目名称或描述..."
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* 搜索和筛选 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="搜索项目..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="likes">按点赞排序</option>
+                <option value="forks">按Fork排序</option>
+                <option value="date">按时间排序</option>
+              </select>
+            </div>
           </div>
 
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2 mb-4">
+          {/* 标签筛选 */}
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedTag(null)}
-              className={`px-3 py-1 rounded-full text-sm ${
-                !selectedTag
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                selectedTag === null
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               全部
@@ -195,178 +258,147 @@ export default function ProjectsPage() {
               <button
                 key={tag}
                 onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-1 rounded-full text-sm ${
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${
                   selectedTag === tag
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {tag}
               </button>
             ))}
           </div>
-
-          {/* Sort */}
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">排序方式：</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="likes">👍 按点赞数</option>
-              <option value="forks">🍴 按Fork数</option>
-              <option value="date">📅 按创建时间</option>
-            </select>
-          </div>
         </div>
 
-        {/* Projects Grid */}
+        {/* 项目列表 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedProjects.map(project => (
-            <Link
-              key={project.id}
-              href="/project-detail"
-              className="block"
-            >
-              <div
-                className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow p-6 h-full"
-              >
-              {/* Header */}
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">{project.name}</h3>
-                <p className="text-gray-600 text-sm line-clamp-3">{project.description}</p>
-              </div>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {project.tags.slice(0, 3).map(tag => (
-                  <span
-                    key={tag}
-                    className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-xs"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <span className="flex items-center gap-1">
-                    👤 {project.author}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    👍 {project.likes}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    🍴 {project.forks}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-xs hover:bg-gray-200">
-                    查看
-                  </button>
-                  <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-xs hover:bg-blue-200">
-                    Fork
-                  </button>
-                </div>
-              </div>
-            </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Empty State */}
-        {sortedProjects.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📭</div>
-            <p className="text-gray-600">没有找到匹配的项目</p>
-          </div>
-        )}
-      </div>
-
-      {/* Share Modal */}
-      {showShareModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">📤 分享项目</h2>
+          {filteredProjects.length === 0 ? (
+            <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+              <p className="text-lg mb-2">没有找到项目</p>
               <button
-                onClick={() => setShowShareModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                onClick={() => {
+                  setSearchTerm('')
+                  setSelectedTag(null)
+                }}
+                className="text-purple-600 dark:text-purple-400 hover:text-purple-700"
               >
-                ✕
+                清除筛选条件
               </button>
             </div>
+          ) : (
+            filteredProjects.map(project => (
+              <Link
+                key={project.id}
+                href={`/project-detail?id=${project.id}`}
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all overflow-hidden group"
+              >
+                <div className="p-6">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-purple-600 transition-colors">
+                    {project.name}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
+                    {project.description}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {project.tags.map(tag => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleLike(project.id)
+                        }}
+                        className="flex items-center gap-1 hover:text-red-600 transition-colors"
+                      >
+                        ❤️ {project.likes}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleFork(project.id)
+                        }}
+                        className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                      >
+                        🍴 {project.forks}
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(project.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
 
-            <div className="space-y-4">
+      {/* 创建项目弹窗 */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">创建新项目</h3>
+            <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  项目名称 *
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  项目名称
                 </label>
                 <input
                   type="text"
                   value={newProject.name}
                   onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   placeholder="输入项目名称"
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  项目描述 *
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  项目描述
                 </label>
                 <textarea
                   value={newProject.description}
                   onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none"
-                  placeholder="描述你的项目..."
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="描述你的项目"
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   标签（用逗号分隔）
                 </label>
                 <input
                   type="text"
                   value={newProject.tags}
                   onChange={(e) => setNewProject({ ...newProject, tags: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="例如: React, TypeScript, Next.js"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="例如: React, TypeScript"
                 />
               </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isPublic"
-                  checked={newProject.isPublic}
-                  onChange={(e) => setNewProject({ ...newProject, isPublic: e.target.checked })}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="isPublic" className="text-sm text-gray-700">
-                  公开项目
-                </label>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  创建
+                </button>
               </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowShareModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleShareProject}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                分享
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

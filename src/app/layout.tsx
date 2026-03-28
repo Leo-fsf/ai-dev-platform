@@ -3,6 +3,7 @@ import { ToastProvider } from '@/components/Toast'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import Navbar from '@/components/Navbar'
 import GlobalSearch from '@/components/GlobalSearch'
+import AutoLogin from '@/components/AutoLogin'
 import './globals.css'
 
 export default function RootLayout({
@@ -23,6 +24,7 @@ export default function RootLayout({
         <ThemeProvider>
           <LanguageProvider>
             <ToastProvider>
+              <AutoLogin />
               <GlobalSearch />
               <Navbar />
               {children}
