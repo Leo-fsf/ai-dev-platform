@@ -178,6 +178,28 @@ designer@example.com / password123
 - **认证**: JWT + HttpOnly Cookie
 - **AI**: OpenAI API
 
+## 🚀 部署
+
+### 快速部署（推荐）
+
+**最简单的部署方式**，5分钟内完成：
+
+1. 访问：https://vercel.com
+2. 使用GitHub账号登录
+3. 点击 "Add New Project" → 选择 "Continue with GitHub"
+4. 选择仓库：`Leo-fsf/ai-dev-platform`
+5. 配置环境变量后点击 "Deploy"
+
+详细部署教程：查看 [GITHUB_DEPLOY.md](./GITHUB_DEPLOY.md)
+
+### 其他部署方式
+
+- ✅ Railway：免费PostgreSQL + 自动部署
+- ✅ Render：免费额度 + 自动HTTPS
+- ✅ Docker：Docker Compose配置完整
+
+---
+
 ## 📄 许可证
 
 MIT License
